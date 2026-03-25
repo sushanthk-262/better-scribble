@@ -37,6 +37,8 @@ class Room:
     is_playing: bool
     history: List[dict]
     guessed_correctly: Set[str]
+    remaining_time: int
+    timer_task: any # To store the asyncio task
 
     def __init__(self, room_id: str):
         self.room_id = room_id
@@ -46,6 +48,8 @@ class Room:
         self.is_playing = False
         self.history = []
         self.guessed_correctly = set()
+        self.remaining_time = 40
+        self.timer_task = None
 
     def add_player(self, player: Player):
         self.players.append(player)

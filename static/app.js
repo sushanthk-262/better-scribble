@@ -7,6 +7,7 @@ const hostControls = document.getElementById('host-controls');
 const playersList = document.getElementById('players-list');
 const startBtn = document.getElementById('start-btn');
 const wordDisplay = document.getElementById('word-display');
+const timerDisplay = document.getElementById('timer-display');
 const roomCodeDisplay = document.getElementById('room-code-display');
 const overlayMessage = document.getElementById('overlay-message');
 
@@ -141,6 +142,19 @@ function handleMessage(msg) {
         case 'clear':
             drawHistory = [];
             clearCanvas();
+            break;
+        case 'timer':
+            if (timerDisplay) {
+                timerDisplay.textContent = msg.time + 's';
+                // Slight pulse effect on low time
+                if (msg.time <= 10) {
+                    timerDisplay.style.color = '#f85149';
+                    timerDisplay.style.transform = 'scale(1.1)';
+                } else {
+                    timerDisplay.style.color = '#0d1117';
+                    timerDisplay.style.transform = 'scale(1)';
+                }
+            }
             break;
     }
 }
