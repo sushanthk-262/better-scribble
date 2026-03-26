@@ -70,15 +70,15 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
             "drawer": drawer.id,
             "word_length": len(room.current_word)
         }, websocket)
-        
+
         if drawer.websocket == websocket:
             await manager.send_personal_message({
                 "type": "word_assignment",
                 "word": room.current_word
             }, websocket)
-        
-        for path in room.history:
-              await manager.send_personal_message({"type": "draw", "data": path}, websocket)
+
+    for path in room.history:
+        await manager.send_personal_message({"type": "draw", "data": path}, websocket)
 
     try:
         while True:
@@ -114,7 +114,10 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
                         start_new_turn_timer(room)
             
             elif msg_type == 'draw':
-                if room.is_playing and len(room.players) > 0:
+                solo_mode = not room.is_playing and len(room.players) == 1
+                if solo_mode:
+                    room.history.append(data.get('data'))  # store only; client already drew locally
+                elif room.is_playing and len(room.players) > 0:
                     drawer = room.players[room.drawer_index]
                     if drawer.websocket == websocket:
                         room.history.append(data.get('data'))
@@ -122,12 +125,17 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
                             "type": "draw",
                             "data": data.get('data')
                         })
-            
+
             elif msg_type == 'clear':
-                drawer = room.players[room.drawer_index]
-                if room.is_playing and drawer.websocket == websocket:
+                solo_mode = not room.is_playing and len(room.players) == 1
+                if solo_mode:
                     room.history = []
                     await manager.broadcast(room, {"type": "clear"})
+                elif room.is_playing:
+                    drawer = room.players[room.drawer_index]
+                    if drawer.websocket == websocket:
+                        room.history = []
+                        await manager.broadcast(room, {"type": "clear"})
             
             elif msg_type == 'chat':
                 msg = data.get('message', '').strip()

@@ -26,6 +26,7 @@ const chatInput = document.getElementById('chat-input');
 let ws;
 let isDrawing = false;
 let isMyTurn = false;
+let isGamePlaying = false;
 let currentSettings = { color: '#000000', size: 5, erase: false };
 let lastPos = { x: 0, y: 0 };
 let drawHistory = []; // Unified history to replay on resize
@@ -108,6 +109,7 @@ function handleMessage(msg) {
             }
             break;
         case 'game_started':
+            isGamePlaying = true;
             isMyTurn = false;
             toolbar.style.display = 'none';
             chatInput.disabled = false;
@@ -162,14 +164,34 @@ function handleMessage(msg) {
 function updatePlayersList(players) {
     playersList.innerHTML = '';
     let host = players[0];
-    
+    const iAmHost = host && host.username === myUsername;
+    const isSolo = players.length === 1 && iAmHost;
+
     // Host is the first player who joined
-    if (host && host.username === myUsername && overlayMessage.style.display !== 'none') {
+    if (iAmHost && overlayMessage.style.display !== 'none') {
         hostControls.style.display = 'block';
     } else {
         hostControls.style.display = 'none';
     }
-    
+
+    // Free-draw mode: alone in room and no game running
+    if (isSolo && !isGamePlaying) {
+        isMyTurn = true;
+        toolbar.style.display = 'flex';
+        overlayMessage.style.display = 'none';
+        chatInput.disabled = false;
+        chatInput.placeholder = 'Type a message...';
+        resizeCanvas();
+    } else if (!isSolo && !isGamePlaying) {
+        // Someone joined before game started — disable free-draw
+        isMyTurn = false;
+        toolbar.style.display = 'none';
+        overlayMessage.style.display = 'flex';
+        chatInput.disabled = false;
+        chatInput.placeholder = 'Type your guess here...';
+        resizeCanvas();
+    }
+
     players.forEach(p => {
         if (p.username === myUsername) myId = p.id;
         const li = document.createElement('li');
@@ -193,7 +215,7 @@ startBtn.addEventListener('click', () => {
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const val = chatInput.value.trim();
-    if (val && !isMyTurn) {
+    if (val && (!isMyTurn || !isGamePlaying)) {
         ws.send(JSON.stringify({ type: 'chat', message: val }));
         chatInput.value = '';
     }
