@@ -1,6 +1,6 @@
+import asyncio
 import json
-import random
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +10,41 @@ from app.manager import manager, rooms
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+async def run_timer(room: Room):
+    try:
+        room.remaining_time = 40
+        while room.remaining_time > 0:
+            await manager.broadcast(room, {"type": "timer", "time": room.remaining_time})
+            await asyncio.sleep(1)
+            room.remaining_time -= 1
+        
+        # Time ran out
+        if room.is_playing:
+            await manager.broadcast(room, {
+                "type": "system_chat", 
+                "data": f"Time's up! The word was {room.current_word}."
+            })
+            room.next_turn()
+            drawer = room.players[room.drawer_index]
+            await manager.broadcast(room, {
+                "type": "game_started",
+                "drawer": drawer.id,
+                "word_length": len(room.current_word)
+            })
+            await manager.send_personal_message({
+                "type": "word_assignment",
+                "word": room.current_word
+            }, drawer.websocket)
+            # Restart timer for new turn
+            room.timer_task = asyncio.create_task(run_timer(room))
+    except asyncio.CancelledError:
+        pass
+
+def start_new_turn_timer(room: Room):
+    if room.timer_task:
+        room.timer_task.cancel()
+    room.timer_task = asyncio.create_task(run_timer(room))
 
 @app.get("/")
 async def get_index():
@@ -76,6 +111,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
                             "type": "system_chat",
                             "data": f"{drawer.username} is drawing now!"
                         })
+                        start_new_turn_timer(room)
             
             elif msg_type == 'draw':
                 if room.is_playing and len(room.players) > 0:
@@ -131,6 +167,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
                                 "type": "word_assignment",
                                 "word": room.current_word
                             }, drawer.websocket)
+                            start_new_turn_timer(room)
                         continue
 
                 await manager.broadcast(room, {
